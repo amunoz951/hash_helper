@@ -1,6 +1,4 @@
 module EasyFormat
-  module_function
-
   module File
     module_function
 
