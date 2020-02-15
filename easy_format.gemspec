@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |spec|
   spec.name          = 'easy_format'
-  spec.version       = '0.1.0'
+  spec.version       = '0.1.1'
   spec.authors       = ['Alex Munoz']
   spec.email         = ['amunoz951@gmail.com']
   spec.license       = 'Apache-2.0'
@@ -13,6 +13,4 @@ Gem::Specification.new do |spec|
 
   spec.files         = Dir['LICENSE', 'lib/**/*']
   spec.require_paths = ['lib']
-
-  spec.add_dependency 'time'
 end
