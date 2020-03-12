@@ -17,6 +17,14 @@ module EasyFormat
       end
       stringified_hash
     end
+
+    def symbolize_all_keys(hash)
+      symbolized_hash = {}
+      hash.each do |k, v|
+        symbolized_hash[k.to_sym] = v.is_a?(::Hash) ? symbolize_all_keys(v) : v
+      end
+      symbolized_hash
+    end
   end
 
   # Deep merge two structures
