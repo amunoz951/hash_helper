@@ -127,4 +127,8 @@ module EasyFormat
       nil # drop the value if we have reached a leaf in the comparison hash
     end
   end
+
+  def reject_keys_with_nil_values(base)
+    deep_reject(base) { |_k, v| v.nil? }
+  end
 end
