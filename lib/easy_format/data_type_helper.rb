@@ -58,19 +58,18 @@ module EasyFormat
     end
   end
 
-  # Identifies what keys in a hash don't have the keys contained in the comparison hash
-  def deep_diff_by_key(base, comparison)
-    return comparison if base.nil? && !comparison.nil?
-
-    missing_values = {}
+  # Identifies what keys in the comparison hash are missing from base hash.
+  # Optionally keep the values from the comparison hash, otherwise assigns the missing keys a value of :missing_key
+  def deep_diff_by_key(base, comparison, keep_values: false)
+    missing_keys = {}
     if comparison.is_a?(::Hash)
-      base = Mash.new(base)
-      comparison.each do |src_key, src_value|
-        base_key_processed_value = deep_diff_by_key(base[src_key], src_value)
-        missing_values[src_key] = base_key_processed_value unless base_key_processed_value.nil?
+      compared_keys = base.is_a?(::Hash) ? comparison.keys - base.keys : comparison.keys # Determine what keys the comparison has that the base doesn't
+      compared_keys.each { |k| missing_keys[k] = keep_values ? comparison[k] : :missing_key } # Save the missing keys
+      comparison.each do |k, v|
+        missing_keys[k] = deep_diff_by_key(base[k], v, keep_values: keep_values) if v.is_a?(::Hash) # Recurse to find more missing keys if the hash goes deeper
       end
     end
-    missing_values.empty? ? nil : missing_values
+    missing_keys.reject { |_k, v| v.is_a?(::Hash) && v.empty? } # Remove any empty hashes as there were no missing keys in them
   end
 
   # Deep diff two structures
