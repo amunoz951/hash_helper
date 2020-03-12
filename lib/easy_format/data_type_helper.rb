@@ -28,19 +28,24 @@ module EasyFormat
   end
 
   # Deep merge two structures
-  def deep_merge(base, override, boolean_or: false)
+  #   boolean_or: use a boolean || operator on the base and override if they are not a Hash or Array
+  #   Left outer join: Only merge keys that already exist in the base
+  def deep_merge(base, override, boolean_or: false, left_outer_join_depth: 0)
+    left_outer_join_depth -= 1 # decrement left_outer_join_depth for recursion
     if base.nil?
+      return nil if left_outer_join_depth >= 0
       return override.is_a?(Hash) ? override.dup : override
     end
 
     case override
     when nil
-      base = base.dup if base.is_a?(Hash)
-      base # if override doesn't exist, then simply copy base to it
+      base = base.dup if base.is_a?(Hash) # duplicate hash to avoid modification by reference issues
+      base # if override doesn't exist, simply return the existing value
     when ::Hash
       base = base.dup
       override.each do |src_key, src_value|
-        base[src_key] = base[src_key] ? EasyFormat.deep_merge(base[src_key], src_value) : src_value
+        next if base[src_key].nil? && left_outer_join_depth >= 0 # if this is a left outer join and the key does not exist in the base, skip it
+        base[src_key] = base[src_key] ? deep_merge(base[src_key], src_value, boolean_or: boolean_or, left_outer_join_depth: left_outer_join_depth) : src_value # Recurse if both are Hash
       end
       base
     when ::Array
