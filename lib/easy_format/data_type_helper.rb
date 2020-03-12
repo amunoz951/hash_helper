@@ -107,4 +107,24 @@ module EasyFormat
       h[k] = v.is_a?(::Hash) ? deep_reject(v, &block) : v # recursively go up the hash tree or keep the value if it's not a hash.
     end
   end
+
+  # Deep diff two Hashes
+  # Remove any keys in the first hash also contained in the second hash
+  # If a key exists in the base, but NOT the comparison, it is kept.
+  def deep_reject_by_hash(base, comparison)
+    return nil if base.nil?
+
+    case comparison
+    when ::Hash
+      return base unless base.is_a?(::Hash) # if base is not a hash but the comparison is, return the base
+      base = base.dup
+      comparison.each do |src_key, src_value|
+        base[src_key] = deep_reject_by_hash(base[src_key], src_value) # recurse to the leaf
+        base[src_key] = nil if base[src_key].is_a?(::Hash) && base[src_key].empty? # set leaves to nil if they are empty hashes
+      end
+      base.reject { |_k, v| v.nil? } # reject any leaves that were set to nil
+    else # rubocop:disable Style/EmptyElse - for clarity
+      nil # drop the value if we have reached a leaf in the comparison hash
+    end
+  end
 end
