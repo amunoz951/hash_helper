@@ -138,6 +138,19 @@ module Hashly
     end
   end
 
+  # Reject hash keys however deep they are. Provide a block and if it evaluates to true for a given key/value pair, it will be rejected.
+  def deep_select(hash, &block)
+    hash.each_with_object({}) do |(k, v), h|
+      if v.is_a?(::Hash)
+        h[k] = deep_select(v, &block)
+        h.delete(k) if h[k].is_a?(::Hash) && h[k].empty?
+        next
+      end
+      next unless yield(k, v) # skip the current key/value pair unless the block given evaluates to true
+      h[k] = v
+    end
+  end
+
   # Deep diff two Hashes
   # Remove any keys in the first hash also contained in the second hash
   # If a key exists in the base, but NOT the comparison, it is kept.
