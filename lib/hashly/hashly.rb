@@ -1,12 +1,6 @@
 module Hashly
   module_function
 
-  def safe_value(hash, *keys)
-    return nil if hash.nil? || hash[keys.first].nil?
-    return hash[keys.first] if keys.length == 1 # return the value if we have reached the final key
-    safe_value(hash[keys.shift], *keys) # recurse until we have reached the final key
-  end
-
   def stringify_all_keys(hash)
     stringified_hash = {}
     hash.each do |k, v|
@@ -54,30 +48,37 @@ module Hashly
   # Returns:
   #   Hash with the merged data.
   # Parameters:
-  #   boolean_or: use a boolean || operator on the base and override if they are not a Hash or Array instead of stomping with the override
+  #   boolean_or: use a boolean || operator on the base and override if they are not a Hash or Array instead of stomping with the override.
   #   left_outer_join_depth: Only merge keys that already exist in the base for the first X levels specified.
-  def deep_merge(base, override, boolean_or: false, left_outer_join_depth: 0)
+  #   modify_by_reference: Hashes will be modified by reference which will modify the actual parameters.
+  #   selected_overrides: Allows for specifying a regex or value(s) that should ONLY be merged into the base Hash.
+  #   excluded_overrides: Allows for specifying a regex or value(s) that should NOT be merged into the base Hash.
+  def deep_merge(base, override, boolean_or: false, left_outer_join_depth: 0, modify_by_reference: false, selected_overrides: [], excluded_overrides: [])
     left_outer_join_depth -= 1 # decrement left_outer_join_depth for recursion
+    return base if reject_value?(override, excluded_overrides)
+    return base unless select_value?(override, selected_overrides)
     if base.nil?
       return nil if left_outer_join_depth >= 0
-      return override.is_a?(::Hash) ? override.dup : override
+      return modify_by_reference || !override.is_a?(::Hash) ? override : override.dup
     end
 
     case override
     when nil
-      base = base.dup if base.is_a?(::Hash) # duplicate hash to avoid modification by reference issues
+      base = base.dup unless modify_by_reference || !base.is_a?(::Hash) # duplicate hash to avoid modification by reference issues
       base # if override doesn't exist, simply return the existing value
     when ::Hash
-      base = base.dup
+      return override unless base.is_a?(::Hash)
+      base = base.dup unless modify_by_reference || !base.is_a?(::Hash)
       override.each do |src_key, src_value|
         next if base[src_key].nil? && left_outer_join_depth >= 0 # if this is a left outer join and the key does not exist in the base, skip it
-        base[src_key] = base[src_key] ? deep_merge(base[src_key], src_value, boolean_or: boolean_or, left_outer_join_depth: left_outer_join_depth) : src_value # Recurse if both are Hash
+        base[src_key] = base[src_key] ? deep_merge(base[src_key], src_value, boolean_or: boolean_or, left_outer_join_depth: left_outer_join_depth, selected_overrides: selected_overrides, excluded_overrides: excluded_overrides) : src_value # Recurse if both are Hash
       end
       base
     when ::Array
+      return override unless base.is_a?(::Array)
       base |= override
       base
-    when ::String, ::Integer, ::Time, ::TrueClass, ::FalseClass
+    when ::String, ::Integer, ::Time, ::TrueClass, ::FalseClass, ::Symbol
       boolean_or ? base || override : override
     else
       throw "Implementation for deep merge of type #{override.class} is missing."
@@ -102,8 +103,9 @@ module Hashly
   # For a hash, returns keys found in both hashes where the values don't match.
   # If a key exists in the base, but NOT the comparison, it is NOT considered a difference so that it can be a one way comparison.
   # For an array, returns an array with values found in the comparison array but not in the base array.
-  def deep_diff(base, comparison)
+  def deep_diff(base, comparison, existing_keys_only: false)
     if base.nil? # if base is nil, entire comparison object is different
+      return {} if comparison.nil?
       return comparison.is_a?(Hash) ? comparison.dup : comparison
     end
 
@@ -114,11 +116,13 @@ module Hashly
       differing_values = {}
       base = base.dup
       comparison.each do |src_key, src_value|
-        difference = deep_diff(base[src_key], src_value)
+        next if existing_keys_only && base.is_a?(::Hash) && !base.keys.include?(src_key)
+        difference = deep_diff(base[src_key], src_value, existing_keys_only: existing_keys_only)
         differing_values[src_key] = difference unless difference == :no_diff
       end
       differing_values.reject { |_k, v| v.is_a?(::Hash) && v.empty? }
     when ::Array
+      return comparison unless base.is_a?(::Array)
       difference = comparison - base
       difference.empty? ? :no_diff : difference
     else
@@ -156,5 +160,43 @@ module Hashly
 
   def reject_keys_with_nil_values(base)
     deep_reject(base) { |_k, v| v.nil? }
+  end
+
+  def safe_value(hash, *keys)
+    return nil if hash.nil? || hash[keys.first].nil?
+    return hash[keys.first] if keys.length == 1 # return the value if we have reached the final key
+    safe_value(hash[keys.shift], *keys) # recurse until we have reached the final key
+  end
+
+  def reject_value?(value, rejected_values)
+    return false if rejected_values == :disabled
+
+    rejected_values = [rejected_values] if rejected_values.is_a?(String) || !rejected_values.is_a?(::Array)
+    rejected_values.each do |rejected_value|
+      case rejected_value
+      when Regexp
+        next if value.is_a?(::Hash) || value.is_a?(::Array) # Don't evaluate regexp on Hash or Array
+        return true if (value.to_s =~ rejected_value) == 0
+      else
+        return true if value == rejected_value
+      end
+    end
+    false
+  end
+
+  def select_value?(value, selected_values)
+    return true if selected_values == :disabled || selected_values.nil? || selected_values.empty?
+
+    selected_values = [selected_values] if selected_values.is_a?(String) || !selected_values.is_a?(::Array)
+    selected_values.each do |selected_value|
+      case selected_value
+      when Regexp
+        next if value.is_a?(::Hash) || value.is_a?(::Array) # Don't evaluate regexp on Hash or Array
+        return true if (value.to_s =~ selected_value) == 0
+      else
+        return true if value == selected_value
+      end
+    end
+    false
   end
 end
